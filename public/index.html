@@ -73,19 +73,20 @@
 </main>
 <script type="module">
 const $ = id => document.getElementById(id);
-const HF = "https://huggingface.co/jkyy";
-const WASM = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm";
+const MODEL_BASES = ["./model/", "https://huggingface.co/jkyy"];  // 同源优先, HF 备源
+const WASM = "./vendor/wasm";
 let bmp = null, models = null, modelPromise = null, lastFace = null, lastPose = null, plans = [];
 
 /* —— 模型预取: 页面打开即后台加载, 不等用户操作 —— */
 modelPromise = (async () => {
-  const vision = await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs");
+  const vision = await import("./vendor/vision_bundle.mjs");
   const fs = await vision.FilesetResolver.forVisionTasks(WASM);
   const mk = (u, k, ex) => vision[k].createFromOptions(fs, { baseOptions: { modelAssetPath: u, delegate: "GPU" }, runningMode: "IMAGE", ...ex });
-  const [face, pose] = await Promise.all([
-    mk(HF + "/actb-face-landmarker/resolve/main/face_landmarker.task", "FaceLandmarker", { numFaces: 3 }),
-    mk(HF + "/actb-pose-landmarker/resolve/main/pose_landmarker_lite.task", "PoseLandmarker", {}),
-  ]);
+  status("加载模型 1/2 · 人脸关键点…");
+  const face = await mk(MODEL_BASES[0] + "face_landmarker.task", "FaceLandmarker", { numFaces: 3 });
+  status("加载模型 2/2 · 人体姿态…");
+  const pose = await mk(MODEL_BASES[0] + "pose_landmarker_lite.task", "PoseLandmarker", {});
+  status("模型就绪 ✓");
   return { face, pose };
 })().then(m => { models = m; return m; }).catch(e => { console.warn("model load fail", e); return null; });
 
