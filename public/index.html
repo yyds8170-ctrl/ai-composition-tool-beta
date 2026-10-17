@@ -40,7 +40,7 @@
 </head>
 <body>
 <header>
-  <h1>AI 帮你重新构图 <span>Beta</span></h1>
+  <h1>AI 帮你重新构图 <span>Beta v0.4</span></h1>
   <div class="sub">随手一拍 → AI 摄影师重新构图裁切 · 全程本机推理 · 永久免费</div>
 </header>
 <main>
@@ -53,6 +53,7 @@
   <div id="preview" style="display:none">
     <img id="pv" alt="你拍到的照片">
     <div class="status" id="status"></div>
+    <button class="btn" id="go" style="display:none">🔄 重新分析</button>
   </div>
   <div id="result" style="display:none">
     <div class="card">
@@ -95,6 +96,7 @@ $("file").addEventListener("change", async e => {
   $("preview").style.display = "block";
   $("pv").src = URL.createObjectURL(f);
   $("result").style.display = "none";
+  $("go").style.display = "none";   // 自动分析, 按钮仅在失败后显示
   // 立即画原图到 before
   const cb = $("cBefore"); cb.width = 480; cb.height = Math.round(480 * bmp.height / bmp.width);
   cb.getContext("2d").drawImage(bmp, 0, 0, cb.width, cb.height);
@@ -114,7 +116,11 @@ async function analyze() {
     renderPlans();
     $("result").style.display = "block";
     status("分析完成 ✓ 点选景别切换 · 保存你最喜欢的一张");
-  } catch (e) { status("分析失败: " + (e.message || e)); }
+  } catch (e) {
+    status("分析失败: " + (e.message || e) + " · 可点击下方按钮重试");
+    $("go").textContent = "🔄 重新分析";
+    $("go").style.display = "block";
+  }
 }
 function status(t) { $("status").textContent = t; }
 
