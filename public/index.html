@@ -77,15 +77,37 @@ const WASM = "./vendor/wasm";
 let models = null, modelPromise, bmp = null, lastFace = null, lastPose = null, plans = [];
 let camStream = null, camRunning = false, rafId = 0, lastDetect = 0;
 
+async function fetchProgress(url, label) {
+  const res = await fetch(url);
+  const total = +(res.headers.get("Content-Length") || 0);
+  const reader = res.body.getReader(); let got = 0; const chunks = [];
+  while (true) {
+    const { done, value } = await reader.read(); if (done) break;
+    chunks.push(value); got += value.length;
+    if (total) status(label + " " + Math.round(got / total * 100) + "%");
+  }
+  const buf = new Uint8Array(got); let off = 0; for (const ch of chunks) { buf.set(ch, off); off += ch.length; }
+  return buf;
+}
 modelPromise = (async () => {
+  status("加载视觉引擎…");
   const vision = await import("./vendor/vision_bundle.mjs");
   const fs = await vision.FilesetResolver.forVisionTasks(WASM);
-  const mk = (u, k, ex) => vision[k].createFromOptions(fs, { baseOptions: { modelAssetPath: u, delegate: "GPU" }, runningMode: "IMAGE", ...ex });
-  const mkV = (u, k, ex) => vision[k].createFromOptions(fs, { baseOptions: { modelAssetPath: u, delegate: "GPU" }, runningMode: "VIDEO", ...ex });
-  const [face, pose] = [await mk(MODEL_BASES[0]+"face_landmarker.task","FaceLandmarker",{numFaces:1}), await mk(MODEL_BASES[0]+"pose_landmarker_lite.task","PoseLandmarker",{})];
+  const mk = async (file, k, ex, delegate) => {
+    const data = await fetchProgress(MODEL_BASES[0] + file, "加载 " + file.split(".")[0]);
+    const blobUrl = URL.createObjectURL(new Blob([data]));
+    try { return await vision[k].createFromOptions(fs, { baseOptions: { modelAssetPath: blobUrl, delegate }, runningMode: "IMAGE", ...ex }); }
+    finally { URL.revokeObjectURL(blobUrl); }
+  };
+  const withFallback = async (file, k, ex) => {
+    try { return await mk(file, k, ex, "GPU"); }
+    catch (e) { status("GPU 不可用，切换 CPU 模式…"); return await mk(file, k, ex, "CPU"); }
+  };
+  const face = await withFallback("face_landmarker.task", "FaceLandmarker", { numFaces: 1 });
+  const pose = await withFallback("pose_landmarker_lite.task", "PoseLandmarker", {});
   status("AI 就绪 ✓ 点上方按钮开始");
   return { face, pose };
-})().catch(e => { status("引擎加载失败: " + (e.message||e)); return null; });
+})().catch(e => { status("引擎加载失败: " + (e.message || e) + "（可点重新分析重试）"); return null; });
 function status(t){ $("status").textContent = t; }
 
 /* ============ 景别裁切共享逻辑（拍后页 + 相机目标框 共用） ============ */
