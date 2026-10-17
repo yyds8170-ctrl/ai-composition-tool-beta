@@ -1,6 +1,6 @@
 // AI Composition Tool Beta - Service Worker
 // 策略: Precache 应用壳 + Runtime 缓存模型资产(跨域 CORS) + 网络优先回退缓存
-const VERSION = "actb-v0.4.1";
+const VERSION = "actb-v0.5.0";
 const SHELL = `${VERSION}-shell`;
 const RUNTIME = `${VERSION}-runtime`;
 const SHELL_ASSETS = ["./", "./index.html", "./icon-192.png", "./icon-512.png", "./manifest.webmanifest", "./404.html"];

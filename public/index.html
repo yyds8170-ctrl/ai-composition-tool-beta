@@ -3,62 +3,64 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>AI Composition Tool Beta · AI 帮你重新构图</title>
+<title>AI 帮你重新构图 Beta v0.5</title>
 <style>
-  :root { --bg:#0b0e13; --fg:#e8ecf1; --sub:#9aa4b2; --line:#232a35; --accent:#8ab4c8; --ok:#8fc7a6; }
+  :root { --bg:#0b0e13; --fg:#e8ecf1; --sub:#9aa4b2; --line:#232a35; --accent:#8ab4c8; --ok:#8fc7a6; --warn:#d8b47a; }
   * { margin:0; padding:0; box-sizing:border-box; }
   body { background:var(--bg); color:var(--fg); font-family:"Source Han Serif SC","Noto Serif SC",-apple-system,serif; min-height:100vh; }
-  header { padding:24px 20px 8px; text-align:center; }
-  h1 { font-size:1.4rem; font-weight:600; }
-  h1 span { color:var(--accent); }
-  .sub { color:var(--sub); font-size:.82rem; margin-top:5px; }
-  main { max-width:680px; margin:0 auto; padding:8px 16px 56px; }
+  header { padding:20px 20px 6px; text-align:center; }
+  h1 { font-size:1.35rem; font-weight:600; } h1 span { color:var(--accent); }
+  .sub { color:var(--sub); font-size:.8rem; margin-top:4px; }
+  main { max-width:680px; margin:0 auto; padding:8px 16px 48px; }
   .card { background:#11151c; border:1px solid var(--line); border-radius:14px; padding:14px; margin-top:12px; }
-  .drop { border:1.5px dashed var(--line); border-radius:12px; padding:28px 14px; text-align:center; color:var(--sub); cursor:pointer; }
-  .drop:hover { border-color:var(--accent); }
-  .drop input { display:none; }
-  .btn { background:var(--accent); color:#0b0e13; border:none; border-radius:10px; padding:12px 20px; font-size:.98rem; font-weight:600; cursor:pointer; width:100%; margin-top:10px; font-family:inherit; }
+  .btn { background:var(--accent); color:#0b0e13; border:none; border-radius:10px; padding:13px 20px; font-size:1rem; font-weight:600; cursor:pointer; width:100%; margin-top:10px; font-family:inherit; }
   .btn.ghost { background:transparent; color:var(--accent); border:1px solid var(--line); }
   .btn:disabled { opacity:.4; }
-  .status { color:var(--sub); font-size:.84rem; margin-top:10px; min-height:1.2em; }
-  #preview { display:none; margin-top:12px; }
-  #preview img { width:100%; border-radius:10px; display:block; border:1px solid var(--line); }
+  .status { color:var(--sub); font-size:.84rem; margin-top:10px; min-height:1.3em; text-align:center; }
+  #camWrap { display:none; position:relative; margin-top:12px; border-radius:14px; overflow:hidden; border:1px solid var(--line); }
+  #video { width:100%; display:block; background:#000; }
+  #camOv { position:absolute; inset:0; width:100%; height:100%; }
+  #guide { position:absolute; left:0; right:0; bottom:76px; text-align:center; font-size:.95rem; color:var(--fg); text-shadow:0 1px 3px #000; padding:0 12px; }
+  #guide b { color:var(--accent); }
+  #shutter { position:absolute; bottom:14px; left:50%; transform:translateX(-50%); width:62px; height:62px; border-radius:50%; border:3px solid #fff; background:rgba(255,255,255,.25); cursor:pointer; }
+  #shutter.ready { background:var(--ok); border-color:var(--ok); }
+  #exitCam { position:absolute; top:10px; left:10px; background:rgba(0,0,0,.5); color:#fff; border:1px solid var(--line); border-radius:8px; padding:6px 12px; font-size:.85rem; cursor:pointer; }
+  #preview { display:none; margin-top:12px; } #preview img { width:100%; border-radius:10px; border:1px solid var(--line); }
   .compare { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; }
-  .compare figure { margin:0; }
   .compare canvas { width:100%; border-radius:10px; display:block; border:1px solid var(--line); background:#0d1016; }
-  .compare figcaption { text-align:center; font-size:.76rem; color:var(--sub); margin-top:5px; }
+  .compare figcaption { text-align:center; font-size:.76rem; color:var(--sub); margin-top:5px; } figure { margin:0; }
   .schemes { display:grid; grid-template-columns:repeat(4,1fr); gap:7px; margin-top:12px; }
-  .scheme { border:1.5px solid var(--line); border-radius:10px; padding:9px 4px; text-align:center; cursor:pointer; user-select:none; }
+  .scheme { border:1.5px solid var(--line); border-radius:10px; padding:9px 4px; text-align:center; cursor:pointer; }
   .scheme.active { border-color:var(--accent); background:rgba(138,180,200,.08); }
-  .scheme b { display:block; font-size:.86rem; }
-  .scheme span { font-size:.68rem; color:var(--sub); }
-  .explain { margin-top:11px; font-size:.88rem; line-height:1.85; }
-  .explain b { color:var(--accent); }
-  .foot { text-align:center; color:var(--sub); font-size:.74rem; margin-top:28px; line-height:1.8; }
-  .foot a { color:var(--accent); text-decoration:none; }
+  .scheme b { display:block; font-size:.86rem; } .scheme span { font-size:.68rem; color:var(--sub); }
+  .explain { margin-top:11px; font-size:.88rem; line-height:1.85; } .explain b { color:var(--accent); }
+  .foot { text-align:center; color:var(--sub); font-size:.74rem; margin-top:26px; line-height:1.8; } .foot a { color:var(--accent); text-decoration:none; }
 </style>
 </head>
 <body>
 <header>
-  <h1>AI 帮你重新构图 <span>Beta v0.4</span></h1>
-  <div class="sub">随手一拍 → AI 摄影师重新构图裁切 · 全程本机推理 · 永久免费</div>
+  <h1>AI 帮你重新构图 <span>Beta v0.5</span></h1>
+  <div class="sub">不会构图也没关系 · AI 实时引导你拍 · 全程本机推理 · 永久免费</div>
 </header>
 <main>
-  <div class="card">
-    <label class="drop" id="drop">
-      <input type="file" id="file" accept="image/*" capture="environment">
-      <div>📱 随手拍一张 / 选一张照片<br><span style="font-size:.74rem">不用会构图 · 图像不上传服务器</span></div>
-    </label>
+  <div class="card" style="text-align:center">
+    <button class="btn" id="openCam">📷 开启 AI 相机（实时构图引导）</button>
+    <button class="btn ghost" id="pickFile">🖼 或上传一张已有照片</button>
+    <input type="file" id="file" accept="image/*" style="display:none">
+    <div class="status" id="status">AI 视觉引擎后台准备中…</div>
   </div>
-  <div id="preview" style="display:none">
-    <img id="pv" alt="你拍到的照片">
-    <div class="status" id="status"></div>
-    <button class="btn" id="go" style="display:none">🔄 重新分析</button>
+  <div id="camWrap">
+    <video id="video" playsinline muted></video>
+    <canvas id="camOv"></canvas>
+    <div id="guide"></div>
+    <button id="shutter" title="快门"></button>
+    <button id="exitCam">✕ 退出</button>
   </div>
+  <div id="preview"><img id="pv" alt=""></div>
   <div id="result" style="display:none">
     <div class="card">
       <div class="compare">
-        <figure><canvas id="cBefore"></canvas><figcaption>你拍到的</figcaption></figure>
+        <figure><canvas id="cBefore"></canvas><figcaption id="capBefore">你拍到的</figcaption></figure>
         <figure><canvas id="cAfter"></canvas><figcaption>AI 重新构图后</figcaption></figure>
       </div>
       <div class="schemes" id="schemes"></div>
@@ -66,174 +68,158 @@
       <button class="btn ghost" id="save">💾 保存这张成片</button>
     </div>
   </div>
-  <div class="foot">
-    模型: MediaPipe (Apache-2.0) · <a href="https://huggingface.co/jkyy">HF 资产</a> ·
-    <a href="https://github.com/yyds8170-ctrl/ai-composition-tool-beta">GitHub</a> · MIT · 永久免费
-  </div>
+  <div class="foot">模型: MediaPipe (Apache-2.0) 同源加载 · <a href="https://github.com/yyds8170-ctrl/ai-composition-tool-beta">GitHub</a> · MIT · 永久免费</div>
 </main>
 <script type="module">
 const $ = id => document.getElementById(id);
-const MODEL_BASES = ["./model/", "https://huggingface.co/jkyy"];  // 同源优先, HF 备源
+const MODEL_BASES = ["./model/"];
 const WASM = "./vendor/wasm";
-let bmp = null, models = null, modelPromise = null, lastFace = null, lastPose = null, plans = [];
+let models = null, modelPromise, bmp = null, lastFace = null, lastPose = null, plans = [];
+let camStream = null, camRunning = false, rafId = 0, lastDetect = 0;
 
-/* —— 模型预取: 页面打开即后台加载, 不等用户操作 —— */
 modelPromise = (async () => {
   const vision = await import("./vendor/vision_bundle.mjs");
   const fs = await vision.FilesetResolver.forVisionTasks(WASM);
   const mk = (u, k, ex) => vision[k].createFromOptions(fs, { baseOptions: { modelAssetPath: u, delegate: "GPU" }, runningMode: "IMAGE", ...ex });
-  status("加载模型 1/2 · 人脸关键点…");
-  const face = await mk(MODEL_BASES[0] + "face_landmarker.task", "FaceLandmarker", { numFaces: 3 });
-  status("加载模型 2/2 · 人体姿态…");
-  const pose = await mk(MODEL_BASES[0] + "pose_landmarker_lite.task", "PoseLandmarker", {});
-  status("模型就绪 ✓");
+  const mkV = (u, k, ex) => vision[k].createFromOptions(fs, { baseOptions: { modelAssetPath: u, delegate: "GPU" }, runningMode: "VIDEO", ...ex });
+  const [face, pose] = [await mk(MODEL_BASES[0]+"face_landmarker.task","FaceLandmarker",{numFaces:1}), await mk(MODEL_BASES[0]+"pose_landmarker_lite.task","PoseLandmarker",{})];
+  status("AI 就绪 ✓ 点上方按钮开始");
   return { face, pose };
-})().then(m => { models = m; return m; }).catch(e => { console.warn("model load fail", e); return null; });
+})().catch(e => { status("引擎加载失败: " + (e.message||e)); return null; });
+function status(t){ $("status").textContent = t; }
 
-/* —— 选图: 立即显示原图 + 自动开始分析（无需点按钮）—— */
-$("file").addEventListener("change", async e => {
-  const f = e.target.files[0]; if (!f) return;
-  bmp = await createImageBitmap(f);
-  $("preview").style.display = "block";
-  $("pv").src = URL.createObjectURL(f);
-  $("result").style.display = "none";
-  $("go").style.display = "none";   // 自动分析, 按钮仅在失败后显示
-  // 立即画原图到 before
-  const cb = $("cBefore"); cb.width = 480; cb.height = Math.round(480 * bmp.height / bmp.width);
-  cb.getContext("2d").drawImage(bmp, 0, 0, cb.width, cb.height);
-  analyze();
+/* ============ 景别裁切共享逻辑（拍后页 + 相机目标框 共用） ============ */
+const SHOT_TYPES = [
+  { name:"特写", ratio:.50, headroom:.05, ar:3/4, focal:"2.5x", side:"C" },
+  { name:"半身", ratio:.28, headroom:.09, ar:3/4, focal:"2x", side:"C" },
+  { name:"七分身", ratio:.16, headroom:.09, ar:3/4, focal:"1.5x", side:"auto" },
+  { name:"全身", ratio:.09, headroom:.07, ar:9/16, focal:"1.0x", side:"C", needBody:true },
+];
+function faceBox(points, iw, ih){ let x0=1,y0=1,x1=0,y1=0; for(const p of points){x0=Math.min(x0,p.x);x1=Math.max(x1,p.x);y0=Math.min(y0,p.y);y1=Math.max(y1,p.y);} return {x:x0*iw,y:y0*ih,w:(x1-x0)*iw,h:(y1-y0)*ih,cx:(x0+x1)/2*iw,cy:(y0+y1)/2*ih}; }
+function bodyBox(points, iw, ih){ let x0=1e9,y0=1e9,x1=-1,y1=-1,vis=0; for(const p of points) if(p.visibility===undefined||p.visibility>.4){x0=Math.min(x0,p.x);x1=Math.max(x1,p.x);y0=Math.min(y0,p.y);y1=Math.max(y1,p.y);vis++;} return vis>=12?{x:x0*iw,y:y0*ih,w:(x1-x0)*iw,h:(y1-y0)*ih,bottom:y1*ih}:null; }
+function cropForShot(fb, body, facing, iw, ih, st){
+  let cropH = fb.h / st.ratio, cropW = cropH * st.ar;
+  if (st.needBody && body) { cropH = Math.max(cropH, (body.bottom - fb.y) / .86); cropW = cropH * st.ar; }
+  const sc = Math.min(1, iw/cropW, ih/cropH); cropH*=sc; cropW*=sc;
+  let x = st.side==="C" ? fb.cx-cropW/2 : (facing>0 ? fb.cx-cropW/3 : fb.cx-cropW*2/3);
+  x = Math.max(0, Math.min(iw-cropW, x));
+  let y = Math.max(0, Math.min(ih-cropH, fb.y - cropH*st.headroom));
+  if (body && body.bottom < y+cropH-cropH*.05) y = Math.max(0, body.bottom-cropH*.97);
+  return { x, y, w:cropW, h:cropH };
+}
+function buildPlans(){
+  const iw=bmp.width, ih=bmp.height; plans=[]; if(!lastFace) return;
+  const fb=faceBox(lastFace,iw,ih); const body=lastPose?bodyBox(lastPose,iw,ih):null;
+  const noseX=lastFace[1].x*iw, eyesMid=(lastFace[33].x+lastFace[263].x)/2*iw;
+  const facing = noseX>=eyesMid?1:-1;
+  for(const st of SHOT_TYPES){
+    if(st.needBody && !body) continue;
+    const c = cropForShot(fb, body, facing, iw, ih, st);
+    plans.push({ name:st.name, focal:st.focal, ...c, sideText: st.side==="auto"?(facing>0?"左三分":"右三分"):"居中",
+      why:{ "特写":"面部特写: 眉眼是画面重心, 眼睛放在上三分线附近, 情绪最直接",
+            "半身":"半身景别: 聚焦人物状态与穿着细节, 背景层次让主体突出",
+            "七分身":"七分身景别: 膝盖上方收口, 人物与环境的平衡感最好",
+            "全身":"全身景别: 脚部完整入画, 头顶留白, 人景融合记录感最强" }[st.name] + " · " + (facing>0?"视线朝右，右侧留空间":"视线朝左，左侧留空间") });
+  }
+  plans.sort((a,b)=>({"全身":0,"七分身":1,"半身":2,"特写":3}[a.name]-{"全身":0,"七分身":1,"半身":2,"特写":3}[b.name]));
+}
+
+/* ============ A 组: 实时相机引导 ============ */
+$("openCam").addEventListener("click", async () => {
+  const m = await modelPromise; if(!m){ status("引擎未就绪，请刷新重试"); return; }
+  try { camStream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:"environment", width:{ideal:1280} }, audio:false }); }
+  catch(e){ status("相机权限被拒绝，请用下方上传照片方式"); return; }
+  const v=$("video"); v.srcObject=camStream; await v.play();
+  $("camWrap").style.display="block"; $("openCam").style.display="none"; $("pickFile").style.display="none";
+  camRunning=true; loop(m);
+});
+$("exitCam").addEventListener("click", stopCam);
+function stopCam(){ camRunning=false; cancelAnimationFrame(rafId); if(camStream){camStream.getTracks().forEach(t=>t.stop());camStream=null;} $("camWrap").style.display="none"; $("openCam").style.display="block"; $("pickFile").style.display="block"; }
+
+function loop(m){
+  if(!camRunning) return;
+  rafId = requestAnimationFrame(()=>loop(m));
+  const v=$("video"); if(v.readyState<2) return;
+  const now=performance.now(); if(now-lastDetect<160) return; lastDetect=now;
+  const fr=m.face.detectForVideo(v,now), pr=m.pose.detectForVideo(v,now);
+  lastFace=(fr.faceLandmarks||[])[0]||null; lastPose=(pr.landmarks||[])[0]||null;
+  const iw=v.videoWidth, ih=v.videoHeight;
+  const ov=$("camOv"); ov.width=ov.clientWidth; ov.height=ov.clientHeight;
+  const sx=ov.width/iw, sy=ov.height/ih;
+  const ctx=ov.getContext("2d"); ctx.clearRect(0,0,ov.width,ov.height);
+  ctx.strokeStyle="rgba(232,236,241,.25)"; ctx.lineWidth=1;
+  for(const f of [1/3,2/3]){ ctx.beginPath();ctx.moveTo(f*ov.width,0);ctx.lineTo(f*ov.width,ov.height);ctx.stroke(); ctx.beginPath();ctx.moveTo(0,f*ov.height);ctx.lineTo(ov.width,f*ov.height);ctx.stroke(); }
+  if(!lastFace){ $("guide").innerHTML="🔍 寻找人物… 把镜头对准人"; $("shutter").classList.remove("ready"); return; }
+  const fb=faceBox(lastFace,iw,ih), body=lastPose?bodyBox(lastPose,iw,ih):null;
+  const noseX=lastFace[1].x*iw, eyesMid=(lastFace[33].x+lastFace[263].x)/2*iw, facing=noseX>=eyesMid?1:-1;
+  // 目标构图 = 七分身(无全身则半身)
+  const st = body ? SHOT_TYPES.find(s=>s.name==="七分身") : SHOT_TYPES.find(s=>s.name==="半身");
+  const tgt=cropForShot(fb,body,facing,iw,ih,st);
+  // 当前取景框(画面中心区域) 与 目标框 偏差 → 圆环对齐
+  const cur={ x:0, y:0, w:iw, h:ih };
+  const dx=(tgt.x+tgt.w/2)-iw/2, dy=(tgt.y+tgt.h/2)-ih/2;
+  const dist=Math.hypot(dx,dy), tol=Math.min(iw,ih)*0.06;
+  const ready = dist<tol;
+  // 距离建议: 脸高占比 vs 目标 ratio
+  const faceRatio=fb.h/ih, want=st.ratio;
+  let tip;
+  if(faceRatio>want*1.25) tip="🚶 <b>再退一点</b>，给人物周围留出空间";
+  else if(faceRatio<want*0.6) tip="🚶 <b>靠近一点</b>，人物太小了";
+  else tip = ready ? "✅ <b>距离合适，保持一下</b>" : "📱 慢慢移动手机，让圆环重合";
+  $("guide").innerHTML=tip;
+  $("shutter").classList.toggle("ready", ready);
+  // 画目标框 + 双圆环
+  ctx.strokeStyle=ready?"#8fc7a6":"#8ab4c8"; ctx.lineWidth=2; ctx.setLineDash(ready?[]:[8,6]);
+  ctx.strokeRect(tgt.x*sx,tgt.y*sy,tgt.w*sx,tgt.h*sy);
+  ctx.setLineDash([]);
+  ctx.beginPath(); ctx.arc(iw/2*sx, ih/2*sy, Math.min(ov.width,ov.height)*0.14, 0, 7); ctx.strokeStyle="rgba(255,255,255,.8)"; ctx.lineWidth=2; ctx.stroke();
+  ctx.beginPath(); ctx.arc((iw/2+dx)*sx,(ih/2+dy)*sy, Math.min(ov.width,ov.height)*0.14, 0, 7); ctx.strokeStyle=ready?"#8fc7a6":"#d8b47a"; ctx.stroke();
+  ctx.fillStyle="rgba(255,255,255,.9)"; ctx.font="12px sans-serif";
+  ctx.fillText(st.name+" · "+st.focal, tgt.x*sx+4, tgt.y*sy-6);
+}
+$("shutter").addEventListener("click", async () => {
+  if(!camStream) return;
+  const v=$("video");
+  const c=document.createElement("canvas"); c.width=v.videoWidth; c.height=v.videoHeight;
+  c.getContext("2d").drawImage(v,0,0);
+  const blob=await new Promise(r=>c.toBlob(r,"image/jpeg",.92));
+  bmp=await createImageBitmap(blob);
+  $("pv").src=URL.createObjectURL(blob);
+  stopCam(); finishAnalyze(true);
 });
 
-async function analyze() {
-  try {
-    status("AI 分析中…");
-    const m = await modelPromise;
-    if (!m) throw new Error("模型加载失败（网络受限），请稍后重试");
-    const fr = m.face.detect(bmp), pr = m.pose.detect(bmp);
-    lastFace = (fr.faceLandmarks || [])[0] || null;
-    lastPose = (pr.landmarks || [])[0] || null;
-    buildPlans();
-    if (!plans.length) { status("未检出人脸，无法构图裁切——请换一张包含人物的正面照片"); return; }
-    renderPlans();
-    $("result").style.display = "block";
-    status("分析完成 ✓ 点选景别切换 · 保存你最喜欢的一张");
-  } catch (e) {
-    status("分析失败: " + (e.message || e) + " · 可点击下方按钮重试");
-    $("go").textContent = "🔄 重新分析";
-    $("go").style.display = "block";
-  }
+/* ============ B 组: 拍后对比页 ============ */
+$("pickFile").addEventListener("click", ()=>$("file").click());
+$("file").addEventListener("change", async e=>{
+  const f=e.target.files[0]; if(!f) return;
+  bmp=await createImageBitmap(f); $("pv").src=URL.createObjectURL(f); $("preview").style.display="block";
+  finishAnalyze(false);
+});
+async function finishAnalyze(fromCam){
+  const m=await modelPromise; if(!m){status("引擎未就绪");return;}
+  status("AI 分析中…");
+  lastFace=((m.face.detect(bmp).faceLandmarks)||[])[0]||null;
+  lastPose=((m.pose.detect(bmp).landmarks)||[])[0]||null;
+  buildPlans();
+  if(!plans.length){ status("未检出人脸——请对准人物拍摄"); return; }
+  $("capBefore").textContent = fromCam ? "当前取景" : "你拍到的";
+  renderPlans(); $("result").style.display="block"; status("完成 ✓ 点选景别切换 · 保存喜欢的");
 }
-function status(t) { $("status").textContent = t; }
-
-/* —— 核心: 人脸锚定景别裁切 v3 ——
-   景别由「脸高占画面高度比例」定义（摄影行业通用）:
-   特写 0.50 / 半身 0.28 / 七分身 0.16 / 全身 0.09(需全身可见)
-   横向: 脸中心吸附三分线(按视线朝向) · 纵向: 头顶留白定位 */
-const SHOT_TYPES = [
-  { name: "特写",   ratio: 0.50, headroom: 0.05, ar: 3/4,    focal: "2.5x", side: "C", needBody: false },
-  { name: "半身",   ratio: 0.28, headroom: 0.09, ar: 3/4,    focal: "2x",   side: "C", needBody: false },
-  { name: "七分身", ratio: 0.16, headroom: 0.09, ar: 3/4,    focal: "1.5x", side: "auto", needBody: false },
-  { name: "全身",   ratio: 0.09, headroom: 0.07, ar: 9/16,   focal: "1.0x", side: "C", needBody: true },
-];
-
-function buildPlans() {
-  const iw = bmp.width, ih = bmp.height;
-  plans = [];
-  if (!lastFace) return;
-  // 人脸像素框
-  let fx0=1, fy0=1, fx1=0, fy1=0;
-  for (const p of lastFace) { fx0=Math.min(fx0,p.x); fx1=Math.max(fx1,p.x); fy0=Math.min(fy0,p.y); fy1=Math.max(fy1,p.y); }
-  const fw = (fx1-fx0)*iw, fh = (fy1-fy0)*ih, fcx = (fx0+fx1)/2*iw, fcy = (fy0+fy1)/2*ih;
-  const noseX = lastFace[1].x*iw;
-  const leX = lastFace[33].x*iw, reX = lastFace[263].x*iw;
-  const facing = noseX >= (leX+reX)/2 ? 1 : -1;
-  // 身体信息(可选)
-  let body = null;
-  if (lastPose) {
-    let minX=1e9,maxX=-1e9,minY=1e9,maxY=-1e9, vis=0;
-    for (const p of lastPose) if (p.visibility === undefined || p.visibility > 0.4) {
-      minX=Math.min(minX,p.x*iw); maxX=Math.max(maxX,p.x*iw); minY=Math.min(minY,p.y*ih); maxY=Math.max(maxY,p.y*ih); vis++;
-    }
-    if (vis >= 12) body = { minX, maxX, minY, maxY, bottom: maxY };
-  }
-  for (const st of SHOT_TYPES) {
-    if (st.needBody && !body) continue;                    // 全身需要身体可见
-    // cropH = 脸高 / faceRatio
-    let cropH, cropW;
-    cropH = fh / st.ratio;
-    cropW = cropH * st.ar;
-    // 全身: 若身体可见, 以身体下沿为准反推
-    if (st.needBody && body) {
-      const bodyH = body.bottom - fy0*ih;
-      cropH = Math.max(cropH, (body.bottom - fy0*ih) / 0.86);   // 脚到头顶占 86% 画面
-      cropW = cropH * st.ar;
-    }
-    // 越界收缩: 不超过原图
-    const scale = Math.min(1, iw / cropW, ih / cropH);
-    cropH *= scale; cropW *= scale;
-    // 横向: 视线朝向侧留白 —— 脸中心偏向朝向反方向的三分线
-    let x;
-    if (st.side === "auto" || st.side === "C") {
-      const lineX = facing > 0 ? fcx - cropW * (1/3 - 0.5) + 0 : fcx + cropW * (1/3 - 0.5);
-      x = facing > 0 ? fcx - cropW / 3 : fcx - cropW * 2 / 3;   // 脸中心在朝向侧的 1/3 处
-      if (st.side === "C") x = fcx - cropW / 2;
-    } else {
-      x = st.side === "L" ? fcx - cropW / 3 : fcx - cropW * 2 / 3;
-    }
-    x = Math.max(0, Math.min(iw - cropW, x));
-    // 纵向: 头顶留白 headroom
-    let y = fy0*ih - cropH * st.headroom;
-    y = Math.max(0, Math.min(ih - cropH, y));
-    // 全身/七分身: 若身体下沿可见且会切在关节附近, 向上收
-    if (body) {
-      const bottom = y + cropH;
-      if (body.bottom < bottom - cropH * 0.05) y = Math.max(0, body.bottom - cropH * 0.97);  // 脚下留 3% 而不是切脚踝下方悬空
-    }
-    plans.push({ name: st.name, focal: st.focal, x, y, w: cropW, h: cropH,
-      sideText: st.side === "auto" ? (facing > 0 ? "左三分" : "右三分") : "居中",
-      why: buildWhy(st, facing, body) });
-  }
-  // 排序: 全身 > 七分身 > 半身 > 特写 (展示顺序)
-  plans.sort((a, b) => ({ "全身":0, "七分身":1, "半身":2, "特写":3 }[a.name] - { "全身":0, "七分身":1, "半身":2, "特写":3 }[b.name]));
-}
-function buildWhy(st, facing, body) {
-  const side = st.side === "auto" ? (facing > 0 ? "左三分" : "右三分") : "居中";
-  const base = {
-    "特写": "面部特写: 眉眼是画面重心, 眼睛放在上三分线附近, 情绪最直接",
-    "半身": "半身景别: 聚焦人物状态与穿着细节, 背景做虚化层次, 主体突出",
-    "七分身": "七分身景别: 膝盖上方收口, 人物与环境的平衡感最好, 落在" + side,
-    "全身": "全身景别: 脚部完整入画, 头顶留白, 人物与场景融合, 记录感最强",
-  }[st.name];
-  const gaze = facing > 0 ? "视线朝右，右侧留出看向前方的空间" : "视线朝左，左侧留出看向前方的空间";
-  return base + " · " + gaze + (body ? " · 已避开脚踝/膝盖裁切线" : "");
-}
-
-/* —— 渲染 —— */
-function renderPlans() {
-  $("schemes").innerHTML = plans.map((p, k) =>
-    `<div class="scheme" data-k="${k}"><b>${p.name}</b><span>${p.focal}</span></div>`).join("");
-  $("schemes").onclick = e => { const d = e.target.closest(".scheme"); if (d) showPlan(+d.dataset.k); };
+function renderPlans(){
+  $("schemes").innerHTML=plans.map((p,k)=>`<div class="scheme" data-k="${k}"><b>${p.name}</b><span>${p.focal}</span></div>`).join("");
+  $("schemes").onclick=e=>{const d=e.target.closest(".scheme");if(d)showPlan(+d.dataset.k);};
   showPlan(0);
 }
-function showPlan(i) {
-  const p = plans[i]; if (!p) return;
-  document.querySelectorAll(".scheme").forEach((el, k) => el.classList.toggle("active", k === i));
-  const cb = $("cBefore"); cb.width = 480; cb.height = Math.round(480 * bmp.height / bmp.width);
-  cb.getContext("2d").drawImage(bmp, 0, 0, cb.width, cb.height);
-  const ca = $("cAfter"); ca.width = 480; ca.height = Math.round(480 * p.h / p.w);
-  const ctx = ca.getContext("2d");
-  ctx.drawImage(bmp, p.x, p.y, p.w, p.h, 0, 0, ca.width, ca.height);
-  ctx.strokeStyle = "rgba(232,236,241,.3)"; ctx.lineWidth = 1;
-  for (const f of [1/3, 2/3]) {
-    ctx.beginPath(); ctx.moveTo(f*ca.width, 0); ctx.lineTo(f*ca.width, ca.height); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(0, f*ca.height); ctx.lineTo(ca.width, f*ca.height); ctx.stroke();
-  }
-  $("explain").innerHTML = `<b>构图思路 · ${p.name} · ${p.focal} · ${p.sideText}</b><br>${p.why}`;
-  $("save").onclick = () => {
-    const a = document.createElement("a");
-    a.download = "ai-composition-" + p.name + ".png";
-    a.href = ca.toDataURL("image/png"); a.click();
-  };
+function showPlan(i){
+  const p=plans[i]; if(!p)return;
+  document.querySelectorAll(".scheme").forEach((el,k)=>el.classList.toggle("active",k===i));
+  const cb=$("cBefore"); cb.width=480; cb.height=Math.round(480*bmp.height/bmp.width); cb.getContext("2d").drawImage(bmp,0,0,cb.width,cb.height);
+  const ca=$("cAfter"); ca.width=480; ca.height=Math.round(480*p.h/p.w);
+  const ctx=ca.getContext("2d"); ctx.drawImage(bmp,p.x,p.y,p.w,p.h,0,0,ca.width,ca.height);
+  ctx.strokeStyle="rgba(232,236,241,.3)"; ctx.lineWidth=1;
+  for(const f of[1/3,2/3]){ctx.beginPath();ctx.moveTo(f*ca.width,0);ctx.lineTo(f*ca.width,ca.height);ctx.stroke();ctx.beginPath();ctx.moveTo(0,f*ca.height);ctx.lineTo(ca.width,f*ca.height);ctx.stroke();}
+  $("explain").innerHTML=`<b>构图思路 · ${p.name} · ${p.focal} · ${p.sideText}</b><br>${p.why}`;
+  $("save").onclick=()=>{const a=document.createElement("a");a.download="ai-composition-"+p.name+".png";a.href=ca.toDataURL("image/png");a.click();};
 }
 </script>
 </body>
