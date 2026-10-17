@@ -109,6 +109,7 @@ modelPromise = (async () => {
   return { face, pose };
 })().catch(e => { status("引擎加载失败: " + (e.message || e) + "（可点重新分析重试）"); return null; });
 function status(t){ $("status").textContent = t; }
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js").catch(function(){});
 
 /* ============ 景别裁切共享逻辑（拍后页 + 相机目标框 共用） ============ */
 const SHOT_TYPES = [
