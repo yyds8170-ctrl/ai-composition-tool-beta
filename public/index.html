@@ -158,6 +158,42 @@ $("openCam").addEventListener("click", async () => {
 $("exitCam").addEventListener("click", stopCam);
 function stopCam(){ camRunning=false; cancelAnimationFrame(rafId); if(camStream){camStream.getTracks().forEach(t=>t.stop());camStream=null;} $("camWrap").style.display="none"; $("openCam").style.display="block"; $("pickFile").style.display="block"; }
 
+let lastLandGuide = 0;
+function guideLandscape(v, ctx, sx, sy){
+  const now = performance.now();
+  const iw=v.videoWidth, ih=v.videoHeight;
+  // 显著性: 降采样亮度+边缘能量 → 主体热区 bbox
+  const sc=4, w=iw/sc|0, h=ih/sc|0;
+  const tmp=document.createElement("canvas"); tmp.width=w; tmp.height=h;
+  const t2=tmp.getContext("2d"); t2.drawImage(v,0,0,w,h);
+  const d=t2.getImageData(0,0,w,h).data;
+  const lum=new Float32Array(w*h);
+  for(let i=0;i<w*h;i++){ lum[i]=(d[i*4]*.299+d[i*4+1]*.587+d[i*4+2]*.114)/255; }
+  const energy=new Float32Array(w*h);
+  for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){ const i=y*w+x;
+    const gx=lum[i+1]-lum[i-1], gy=lum[i+w]-lum[i-w];
+    energy[i]=Math.abs(gx)+Math.abs(gy)+Math.abs(lum[i]-.5)*.6; }
+  // top 15% 能量单元 bbox
+  const sorted=Array.from(energy).sort((a,b)=>b-a); const thr=sorted[(w*h*.85)|0]||.05;
+  let x0=w,y0=h,x1=0,y1=0,cnt=0;
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++) if(energy[y*w+x]>=thr){ x0=Math.min(x0,x);x1=Math.max(x1,x);y0=Math.min(y0,y);y1=Math.max(y1,y);cnt++; }
+  if(cnt<20){ $("guide").innerHTML="🌄 风景模式：对准主体，慢慢平移找构图"; $("shutter").classList.remove("ready"); return; }
+  const sub={x:x0/sc,y:y0/sc,w:(x1-x0)/sc,h:(y1-y0)/sc};
+  const cx=sub.x+sub.w/2, cy=sub.y+sub.h/2;
+  // 目标: 主体中心放三分交点(取最近交点), 面积占比适中
+  const t3x=[iw/3,2*iw/3], t3y=[ih/3,2*ih/3];
+  let bx=t3x[0], by=t3y[0];
+  for(const tx of t3x)for(const ty of t3y){ if(Math.hypot(cx-tx,cy-ty)<Math.hypot(cx-bx,cy-by)){bx=tx;by=ty;} }
+  const dx=bx-cx, dy=by-cy, dist=Math.hypot(dx,dy), tol=Math.min(iw,ih)*.07;
+  const ready=dist<tol;
+  ctx.strokeStyle=ready?"#8fc7a6":"#8ab4c8"; ctx.lineWidth=2; ctx.setLineDash(ready?[]:[8,6]);
+  ctx.strokeRect(sub.x*sx,sub.y*sy,sub.w*sx,sub.h*sy); ctx.setLineDash([]);
+  ctx.beginPath(); ctx.arc(iw/2*sx,ih/2*sy,Math.min(ov.width,ov.height)*.14,0,7); ctx.strokeStyle="rgba(255,255,255,.8)"; ctx.stroke();
+  ctx.beginPath(); ctx.arc((iw/2+dx)*sx,(ih/2+dy)*sy,Math.min(ov.width,ov.height)*.14,0,7); ctx.strokeStyle=ready?"#8fc7a6":"#d8b47a"; ctx.stroke();
+  const msg = ready ? "✅ <b>构图到位，保持</b>——轻按快门自动优化" : (Math.abs(dx)>Math.abs(dy) ? (dx>0?"👉 向右缓移，把主体放到三分线":"👈 向左缓移，把主体放到三分线") : (dy>0?"👇 稍向下带一点主体":"👆 稍向上抬一点主体"));
+  if(now-lastLandGuide>600){ lastLandGuide=now; $("guide").innerHTML=msg; }
+  $("shutter").classList.toggle("ready", ready);
+}
 function loop(m){
   if(!camRunning) return;
   rafId = requestAnimationFrame(()=>loop(m));
@@ -171,7 +207,7 @@ function loop(m){
   const ctx=ov.getContext("2d"); ctx.clearRect(0,0,ov.width,ov.height);
   ctx.strokeStyle="rgba(232,236,241,.25)"; ctx.lineWidth=1;
   for(const f of [1/3,2/3]){ ctx.beginPath();ctx.moveTo(f*ov.width,0);ctx.lineTo(f*ov.width,ov.height);ctx.stroke(); ctx.beginPath();ctx.moveTo(0,f*ov.height);ctx.lineTo(ov.width,f*ov.height);ctx.stroke(); }
-  if(!lastFace){ $("guide").innerHTML="🔍 寻找人物… 把镜头对准人"; $("shutter").classList.remove("ready"); return; }
+  if(!lastFace){ guideLandscape(v, ctx, sx, sy); return; }
   const fb=faceBox(lastFace,iw,ih), body=lastPose?bodyBox(lastPose,iw,ih):null;
   const noseX=lastFace[1].x*iw, eyesMid=(lastFace[33].x+lastFace[263].x)/2*iw, facing=noseX>=eyesMid?1:-1;
   // 目标构图 = 七分身(无全身则半身)
