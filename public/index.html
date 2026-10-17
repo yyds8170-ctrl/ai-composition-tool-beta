@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Composition Tool Beta · 移动端 AI 实时构图</title>
+<style>
+  :root { --bg:#0b0e13; --fg:#e8ecf1; --sub:#9aa4b2; --line:#232a35; --accent:#8ab4c8; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--fg); font-family:"Source Han Serif SC","Noto Serif SC",serif; min-height:100vh; display:flex; align-items:center; justify-content:center; }
+  main { max-width:720px; padding:48px 32px; }
+  h1 { font-size:2.1rem; font-weight:600; letter-spacing:.04em; }
+  .sub { color:var(--sub); margin-top:14px; line-height:1.9; }
+  .tag { display:inline-block; border:1px solid var(--line); border-radius:999px; padding:4px 14px; margin:24px 8px 0 0; font-size:.85rem; color:var(--accent); }
+  .foot { margin-top:56px; padding-top:20px; border-top:1px solid var(--line); color:var(--sub); font-size:.82rem; }
+  a { color:var(--accent); text-decoration:none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>AI Composition Tool <span style="color:var(--accent)">Beta</span></h1>
+  <p class="sub">移动端 AI 实时构图工具 · 原创开源实现。<br>本地视觉模型推理 + 云端增强双链路，为每一次按快门提供构图引导。</p>
+  <div>
+    <span class="tag">智能人像裁切</span><span class="tag">视线留白</span><span class="tag">边缘吸附</span><span class="tag">光位诊断</span><span class="tag">离线可用</span>
+  </div>
+  <p class="foot">工程进行中 · 构建状态见 <a href="https://github.com/yyds8170-ctrl/ai-composition-tool-beta/actions">CI</a> · License: MIT</p>
+</main>
+</body>
+</html>
