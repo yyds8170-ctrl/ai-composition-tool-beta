@@ -159,6 +159,7 @@ function buildPlans() {
   for (const st of SHOT_TYPES) {
     if (st.needBody && !body) continue;                    // 全身需要身体可见
     // cropH = 脸高 / faceRatio
+    let cropH, cropW;
     cropH = fh / st.ratio;
     cropW = cropH * st.ar;
     // 全身: 若身体可见, 以身体下沿为准反推
