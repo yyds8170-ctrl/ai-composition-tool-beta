@@ -2,28 +2,209 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>AI Composition Tool Beta · 移动端 AI 实时构图</title>
 <style>
-  :root { --bg:#0b0e13; --fg:#e8ecf1; --sub:#9aa4b2; --line:#232a35; --accent:#8ab4c8; }
+  :root { --bg:#0b0e13; --fg:#e8ecf1; --sub:#9aa4b2; --line:#232a35; --accent:#8ab4c8; --ok:#8fc7a6; --warn:#d8b47a; }
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { background:var(--bg); color:var(--fg); font-family:"Source Han Serif SC","Noto Serif SC",serif; min-height:100vh; display:flex; align-items:center; justify-content:center; }
-  main { max-width:720px; padding:48px 32px; }
-  h1 { font-size:2.1rem; font-weight:600; letter-spacing:.04em; }
-  .sub { color:var(--sub); margin-top:14px; line-height:1.9; }
-  .tag { display:inline-block; border:1px solid var(--line); border-radius:999px; padding:4px 14px; margin:24px 8px 0 0; font-size:.85rem; color:var(--accent); }
-  .foot { margin-top:56px; padding-top:20px; border-top:1px solid var(--line); color:var(--sub); font-size:.82rem; }
-  a { color:var(--accent); text-decoration:none; }
+  body { background:var(--bg); color:var(--fg); font-family:"Source Han Serif SC","Noto Serif SC",-apple-system,serif; min-height:100vh; }
+  header { padding:28px 20px 12px; text-align:center; }
+  h1 { font-size:1.5rem; font-weight:600; letter-spacing:.04em; }
+  h1 span { color:var(--accent); }
+  .sub { color:var(--sub); font-size:.85rem; margin-top:6px; }
+  main { max-width:640px; margin:0 auto; padding:12px 16px 60px; }
+  .card { background:#11151c; border:1px solid var(--line); border-radius:14px; padding:18px; margin-top:14px; }
+  .drop { border:1.5px dashed var(--line); border-radius:12px; padding:34px 16px; text-align:center; color:var(--sub); cursor:pointer; transition:.2s; }
+  .drop:hover { border-color:var(--accent); color:var(--fg); }
+  .drop input { display:none; }
+  .btn { display:inline-block; background:var(--accent); color:#0b0e13; border:none; border-radius:10px; padding:12px 22px; font-size:1rem; font-weight:600; cursor:pointer; width:100%; margin-top:12px; font-family:inherit; }
+  .btn:disabled { opacity:.4; cursor:wait; }
+  .btn.ghost { background:transparent; color:var(--accent); border:1px solid var(--line); }
+  #stage { position:relative; display:none; margin-top:14px; }
+  #img, #overlay { width:100%; border-radius:10px; display:block; }
+  #overlay { position:absolute; inset:0; }
+  .report { margin-top:14px; font-size:.92rem; line-height:1.9; }
+  .report b { color:var(--accent); }
+  .row { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+  .pill { border:1px solid var(--line); border-radius:999px; padding:4px 12px; font-size:.8rem; color:var(--sub); }
+  .pill.ok { color:var(--ok); border-color:var(--ok); }
+  .pill.warn { color:var(--warn); border-color:var(--warn); }
+  .status { color:var(--sub); font-size:.85rem; margin-top:10px; min-height:1.2em; }
+  .foot { text-align:center; color:var(--sub); font-size:.78rem; margin-top:36px; line-height:1.8; }
+  .foot a { color:var(--accent); text-decoration:none; }
 </style>
 </head>
 <body>
+<header>
+  <h1>AI Composition Tool <span>Beta</span></h1>
+  <div class="sub">移动端 AI 实时构图 · 在线体验版 v0.3 · 全部推理在本机浏览器完成</div>
+</header>
 <main>
-  <h1>AI Composition Tool <span style="color:var(--accent)">Beta</span></h1>
-  <p class="sub">移动端 AI 实时构图工具 · 原创开源实现。<br>本地视觉模型推理 + 云端增强双链路，为每一次按快门提供构图引导。</p>
-  <div>
-    <span class="tag">智能人像裁切</span><span class="tag">视线留白</span><span class="tag">边缘吸附</span><span class="tag">光位诊断</span><span class="tag">离线可用</span>
+  <div class="card">
+    <label class="drop" id="drop">
+      <input type="file" id="file" accept="image/*" capture="environment">
+      <div>📱 点击拍摄 / 选择照片<br><span style="font-size:.78rem">人像照片效果最佳 · 图像不上传服务器</span></div>
+    </label>
+    <button class="btn" id="go" disabled>开始 AI 构图分析</button>
+    <div class="status" id="status"></div>
   </div>
-  <p class="foot">工程进行中 · 构建状态见 <a href="https://github.com/yyds8170-ctrl/ai-composition-tool-beta/actions">CI</a> · License: MIT</p>
+  <div id="stage">
+    <div class="card" style="padding:10px">
+      <img id="img" alt="待分析">
+      <canvas id="overlay"></canvas>
+    </div>
+    <div class="card report" id="report" style="display:none"></div>
+  </div>
+  <div class="foot">
+    模型: MediaPipe (Apache-2.0) · 托管于 <a href="https://huggingface.co/jkyy">Hugging Face</a><br>
+    <a href="https://github.com/yyds8170-ctrl/ai-composition-tool-beta">GitHub 仓库</a> · MIT License · 永久免费
+  </div>
 </main>
+<script type="module">
+const $ = id => document.getElementById(id);
+const fileEl = $("file"), goBtn = $("go"), statusEl = $("status");
+let imageBitmap = null, modelCache = null;
+const HF = "https://huggingface.co/jkyy";
+const WASM = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm";
+const CDN = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+
+fileEl.addEventListener("change", async e => {
+  const f = e.target.files[0]; if (!f) return;
+  imageBitmap = await createImageBitmap(f);
+  const img = $("img"), ov = $("overlay");
+  img.src = URL.createObjectURL(f);
+  img.onload = () => {
+    $("stage").style.display = "block";
+    ov.width = img.clientWidth; ov.height = img.clientHeight;
+    $("report").style.display = "none";
+    goBtn.disabled = false; goBtn.textContent = "开始 AI 构图分析";
+  };
+});
+
+async function loadModels() {
+  if (modelCache) return modelCache;
+  statusEl.textContent = "首次加载视觉模型中（约 3-8 秒，之后浏览器缓存）…";
+  const vision = await import(CDN + "/vision_bundle.mjs");
+  const fileset = await vision.FilesetResolver.forVisionTasks(WASM);
+  const mk = (url, opts) => vision[opts.kind].createFromOptions(fileset, {
+    baseOptions: { modelAssetPath: url, delegate: "GPU" }, runningMode: "IMAGE", ...opts.extra });
+  const [face, pose] = await Promise.all([
+    mk(HF + "/actb-face-landmarker/resolve/main/face_landmarker.task", { kind: "FaceLandmarker", extra: { numFaces: 3 } }),
+    mk(HF + "/actb-pose-landmarker/resolve/main/pose_landmarker_lite.task", { kind: "PoseLandmarker", extra: {} }),
+  ]);
+  modelCache = { vision, face, pose };
+  statusEl.textContent = "模型就绪 ✓";
+  return modelCache;
+}
+
+goBtn.addEventListener("click", async () => {
+  if (!imageBitmap) return;
+  goBtn.disabled = true;
+  try {
+    const { face, pose } = await loadModels();
+    statusEl.textContent = "AI 分析中…";
+    const fr = face.detect(imageBitmap), pr = pose.detect(imageBitmap);
+    render(imageBitmap, fr, pr);
+  } catch (err) {
+    statusEl.textContent = "分析失败: " + (err.message || err) + "（网络模型加载可能受限，可稍后重试）";
+  }
+  goBtn.disabled = false;
+});
+
+function render(bmp, fr, pr) {
+  const img = $("img"), ov = $("overlay");
+  const W = ov.width, H = ov.height, sx = W / bmp.width, sy = H / bmp.height;
+  const ctx = ov.getContext("2d");
+  ctx.clearRect(0, 0, W, H);
+  const lines = [];
+  const faces = fr.faceLandmarks || [];
+  // —— 三分线
+  ctx.strokeStyle = "rgba(138,180,200,.45)"; ctx.lineWidth = 1;
+  for (const f of [1/3, 2/3]) {
+    ctx.beginPath(); ctx.moveTo(f*W, 0); ctx.lineTo(f*W, H); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, f*H); ctx.lineTo(W, f*H); ctx.stroke();
+  }
+  // —— 人脸锚点 + 留白分析
+  if (faces.length) {
+    const lm = faces[0];
+    const nose = lm[1], le = lm[33], re = lm[263];
+    const eyesMid = (le.x + re.x) / 2 * W;
+    const facing = (nose.x * W) >= eyesMid ? 1 : -1;
+    const faceOuterX = (facing > 0 ? Math.max(re.x, nose.x) : Math.min(le.x, nose.x)) * W;
+    const frontSpace = facing > 0 ? W - faceOuterX : faceOuterX;
+    // 脸框
+    let minX=1, minY=1, maxX=0, maxY=0;
+    for (const p of lm) { minX=Math.min(minX,p.x); maxX=Math.max(maxX,p.x); minY=Math.min(minY,p.y); maxY=Math.max(maxY,p.y); }
+    ctx.strokeStyle = "#8ab4c8"; ctx.lineWidth = 2;
+    ctx.strokeRect(minX*W, minY*H, (maxX-minX)*W, (maxY-minY)*H);
+    // 留白评估
+    const front = facing > 0 ? W - faceOuterX : faceOuterX;
+    const target = 0.30 * W;
+    if (front < target * 0.6) lines.push(`⚠️ <b>视线留白不足</b>: 朝${facing>0?"右":"左"}前方空间偏小，建议向${facing>0?"左":"右"}平移或后退一点`);
+    else lines.push(`✅ <b>视线留白</b>: 朝${facing>0?"右":"左"}前方空间 ${(front/W*100)|0}%，达标`);
+    // 主体框（供裁切）
+    var faceBox = { x: minX*W, y: minY*H, w: (maxX-minX)*W, h: (maxY-minY)*H };
+  }
+  // —— 姿态关节 + 禁区带
+  const poses = pr.landmarks || [];
+  if (poses.length) {
+    const pts = poses[0];
+    const joints = [27,28,25,26,23,24,15,16,13,14,11,12];
+    ctx.fillStyle = "#d8b47a";
+    for (const i of joints) { const p = pts[i]; ctx.beginPath(); ctx.arc(p.x*W, p.y*H, 4, 0, 7); ctx.fill(); }
+    // 禁区带（y ± 2% 帧高）
+    ctx.fillStyle = "rgba(216,180,122,.16)";
+    for (const i of joints) ctx.fillRect(0, (pts[i].y - 0.02)*H, W, 0.04*H);
+    // 安全区建议（小腿中/大腿中/上臂中）
+    const seg = (a,b) => ((pts[a].y + pts[b].y)/2);
+    const anchors = [seg(23,25), seg(25,27), seg(11,13), seg(13,15)].map(v => v*H);
+    ctx.fillStyle = "rgba(143,199,166,.22)";
+    for (const a of anchors) ctx.fillRect(0, a-8, W, 16);
+    lines.push(`✅ <b>关节安全带</b>: 金色=禁区(勿切) · 绿色=安全裁切带`);
+  }
+  // —— 建议裁切窗（4:5 示例, 含关节安全与留白）—— 简化评分演示
+  if (faces.length && poses.length) {
+    const lm = faces[0];
+    let minX=1, minY=1, maxX=0, maxY=0;
+    for (const p of poses[0]) if (p.visibility === undefined || p.visibility > 0.5) { minX=Math.min(minX,p.x); maxX=Math.max(maxX,p.x); minY=Math.min(minY,p.y); maxY=Math.max(maxY,p.y); }
+    const r = 0.8, w = Math.min(W, (maxX-minX)*W * 1.6), h = w / r;
+    // 下沿取膝-踝中点安全带
+    const pts = poses[0];
+    const yB = ((pts[25].y + pts[27].y)/2) * H;
+    let cx = Math.max(0, Math.min(W - w, (minX*W + maxX*W)/2 - w/2));
+    let y0 = Math.max(0, yB - h);
+    ctx.strokeStyle = "#8fc7a6"; ctx.lineWidth = 3; ctx.setLineDash([]);
+    ctx.strokeRect(cx, y0, w, h);
+    lines.push(`🟢 <b>建议裁切</b>: 4:5 比例 · 下缘落在小腿安全带 · 虚线外可舍弃`);
+  } else if (faces.length) {
+    lines.push(`ℹ️ 未检出全身姿态: 已按人脸给出留白建议，全身构图需完整入镜`);
+  } else {
+    lines.push(`ℹ️ 未检出人脸: 请使用正面人像照片体验完整功能`);
+  }
+  // —— 光位诊断（灰度采样）
+  const cnv = document.createElement("canvas"); cnv.width = W; cnv.height = H;
+  const c2 = cnv.getContext("2d"); c2.drawImage(bmp, 0, 0, W, H);
+  const gray = c2.getImageData(0, 0, W, H).data;
+  let lSum=0,lN=0,rSum=0,rN=0,over=0,under=0,total=0;
+  for (let y = 0; y < H; y += 4) for (let x = 0; x < W; x += 4) {
+    const i = (y*W+x)*4, v = (gray[i]*0.299 + gray[i+1]*0.587 + gray[i+2]*0.114);
+    total++; if (v > 243) over++; if (v < 14) under++;
+    if (faces.length && faceBox && x >= faceBox.x && x <= faceBox.x + faceBox.w && y >= faceBox.y && y <= faceBox.y + faceBox.h) {
+      if (x < faceBox.x + faceBox.w/2) { lSum += v; lN++; } else { rSum += v; rN++; }
+    }
+  }
+  if (lN && rN) {
+    const L = lSum/lN, R = rSum/rN, ratio = Math.abs(L-R)/Math.max(L,R,1e-6);
+    const pat = ratio < 0.12 ? "平坦光(建议侧转 30-45° 增加立体感)" : ratio > 0.75 ? "分割光(高对比戏剧感)" : "环状光(安全光位)";
+    lines.push(`💡 <b>光位</b>: ${pat} · 光比 ${ratio.toFixed(2)}`);
+  }
+  if (over/total > 0.05) lines.push(`⚠️ 过曝偏高 (${(over/total*100)|0}%)`);
+  if (under/total > 0.08) lines.push(`⚠️ 欠曝偏高 (${(under/total*100)|0}%)`);
+  const rep = $("report");
+  rep.innerHTML = lines.map(l => `<div>${l}</div>`).join("");
+  rep.style.display = "block";
+  statusEl.textContent = "分析完成 ✓";
+}
+</script>
 </body>
 </html>
