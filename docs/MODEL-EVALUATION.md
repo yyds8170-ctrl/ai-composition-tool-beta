@@ -52,16 +52,17 @@
 
 **授权风险清单**：❌ AGPL（YOLOv8-face）— 传染义务；❌ RMBG-1.4 / OpenPose — 非商用限制；✅ 其余候选 Apache-2.0。
 
-## 三、HuggingFace 部署清单（阶段 2 后半执行）
+## 三、HuggingFace 部署清单（✅ 已部署 2026-10-16）
 
-| 仓库（规划） | 内容 | 说明 |
+| 仓库 | 内容 | 状态 |
 |---|---|---|
-| `yyds8170-ctrl/actb-face-landmarker` | face_landmarker.task + wasm | 转存官方权重 + 自述卡 |
-| `yyds8170-ctrl/actb-selfie-seg` | selfie_segmenter.tflite | 同上 |
-| `yyds8170-ctrl/actb-pose-landmarker` | pose_landmarker.task | 同上 |
-| `yyds8170-ctrl/actb-modnet-onnx`（可选） | modnet.onnx | 精细 matting 备选 |
+| [`jkyy/actb-face-landmarker`](https://huggingface.co/jkyy/actb-face-landmarker) | face_landmarker.task（478点 float16）+ model card | ✅ 公开可下载 |
+| [`jkyy/actb-selfie-seg`](https://huggingface.co/jkyy/actb-selfie-seg) | selfie_segmenter.tflite（landscape float16）+ model card | ✅ 公开可下载 |
+| [`jkyy/actb-pose-landmarker`](https://huggingface.co/jkyy/actb-pose-landmarker) | pose_landmarker_lite.task（33点 float16）+ model card | ✅ 公开可下载 |
 
-> 部署方式：HF Model Repo（公开）+ model card 标注原始授权与来源链接；应用端通过 HF resolve URL + jsDelivr 双源下载，失败降级内置 CDN。
+- 全部标注 Apache-2.0 与原始来源（Google MediaPipe 官方发布转存）
+- 匿名 resolve URL 验证通过（HTTP 200）
+- 下载策略：HF resolve 主源 + jsDelivr 备源 + IndexedDB 缓存
 
 ## 四、本地推理封装设计（阶段 2 收口物）
 
