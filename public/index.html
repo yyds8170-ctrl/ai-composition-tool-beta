@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>AI 帮你重新构图 Beta v0.6</title>
+<title>AI 帮你重新构图 Beta v0.7</title>
 <style>
   :root { --bg:#0b0e13; --fg:#e8ecf1; --sub:#9aa4b2; --line:#232a35; --accent:#8ab4c8; --ok:#8fc7a6; --warn:#d8b47a; }
   * { margin:0; padding:0; box-sizing:border-box; }
@@ -51,7 +51,7 @@
 </head>
 <body>
 <header>
-  <h1>AI 帮你重新构图 <span>Beta v0.6</span></h1>
+  <h1>AI 帮你重新构图 <span>Beta v0.7</span></h1>
   <div class="sub">不会构图也没关系 · AI 实时引导你拍 · 全程本机推理 · 永久免费</div>
 </header>
 <main>
@@ -158,6 +158,60 @@ function computeGuides(s, fb, bb, isPort, light, iw, ih, gaze) {
   if (light && light.pos) tips.push({ k: "light_" + light.pos.key, pri: 4, a: "💡", x: light.pos.txt });
   return tips.sort((a, b) => a.pri - b.pri).slice(0, 2);
 }
+
+/* ---------- v0.7 五轨教练调度器(置信门槛/豁免区/双向死区/兜底通道/话术带收益) ---------- */
+function sizeLabel(h) { return h >= .82 ? "特写" : h >= .60 ? "半身" : h >= .42 ? "七分身" : h >= .26 ? "全身" : "远景"; }
+function estDistance(h) { if (!h || h < .05) return null; return Math.max(.5, Math.round(1.47 / h * 2) / 2); }
+function camHeightAdvice(size) { return { "特写": "手机与人物眼睛平齐", "半身": "手机举到与胸部平齐", "七分身": "手机放低到腰部下方、微仰拍更显高", "全身": "手机放低到膝盖高度、微微仰拍显腿长", "远景": "机位可稍低，突出环境" }[size] || null; }
+function gOrientation(fc, pa, fa) {
+  if (!(fc >= 1) || !(pa > 0) || !(fa > 0)) return null;
+  if (fc === 1 && pa > 1.35 && fa > 1.2) return { pri: 5, a: "📱", x: "竖持手机，竖拍人像更合身" };
+  if (fc >= 3 && fa < .85) return { pri: 5, a: "📱", x: "横持手机，多人合影横拍更从容" };
+  return null;
+}
+function gDistance(hr) {
+  if (!(hr > 0)) return null;
+  if (hr < .12) return null;                       // 远景小人豁免, 不打扰
+  if (hr > .90) return { pri: 1, a: "🔙", x: "再退半步，给人物周围留点空间，构图会更松弛" };
+  if (hr < .25) return { pri: 1, a: "🔜", x: "走近一些，人物再大一点，细节更清楚" };
+  if (hr >= .35 && hr <= .75) return { pri: 9, good: 1, a: "✅", x: "距离合适，保持一下" };  // 保持区(死区即美德)
+  return null;
+}
+function gWaistLevel(hr, top, bottom) {
+  if (!(hr >= .85) || !(top >= 0) || !(bottom > top)) return null;
+  const cy = (top + bottom) / 2;
+  if (cy > .58) return { pri: 3, a: "⬇️", x: "机位放低，与腰部齐平，人更显高" };
+  if (cy < .42) return { pri: 3, a: "⬆️", x: "机位举高一点，别贴地仰拍" };
+  return null;
+}
+function gEyeGrid(eyesY) {
+  if (!(eyesY >= 0)) return null;
+  if (eyesY > .42) return { pri: 2, a: "⬆️", x: "把眼睛对上上方那条横线，画面立刻稳定下来" };
+  if (eyesY < .24) return { pri: 2, a: "⬇️", x: "眼睛稍放低到横线上，头顶留白更舒服" };
+  return null;
+}
+function singleGate(fc, pc) { return (fc >= 2 || pc >= 2) ? { txt: "多人画面：单人构图建议暂停，先对齐所有人" } : null; }
+function composeCoach(fb, bb, faceLM, iw, ih, gaze) {
+  const tips = [];
+  const fc = fb ? 1 : 0;
+  const pc = bb ? 1 : 0;
+  const gate = singleGate(fc, pc);
+  if (gate) return [{ pri: 0, a: "👥", x: gate.txt }];
+  const hr = fb ? (bb ? Math.max(bb.h / ih, fb.h / ih) : fb.h / ih * 1.9) : (bb ? bb.h / ih : 0);   // 人像占比: 身体高优先, 无身体用脸高×1.9 估算
+  const fa = iw / ih;
+  const pa = fb && bb ? bb.w / Math.max(bb.h, 1) : (fb ? .45 : 0);
+  const eyesY = faceLM ? (faceLM[33].y + faceLM[263].y) / 2 : -1;
+  [gOrientation(fc, pa, fa), gDistance(hr), gWaistLevel(hr, bb ? bb.y / ih : (fb ? fb.y / ih : -1), bb ? bb.bottom / ih : -1), gEyeGrid(fb ? eyesY : -1)].forEach(t => { if (t) tips.push(t); });
+  if (hr > .26) { const ch = camHeightAdvice(sizeLabel(hr)); if (ch && tips.length < 2 && hr >= .35 && hr <= .75) tips.push({ pri: 4, a: "📷", x: ch }); }
+  if (gaze && !gaze.dead && gaze.dir !== 0 && fb) {
+    const front = gaze.dir > 0 ? 1 - fb.r.x1 : fb.r.x0;
+    if (front < .18) tips.push({ pri: 2, a: gaze.dir > 0 ? "⬅️" : "➡️", x: "往" + (gaze.dir > 0 ? "左" : "右") + "挪一点，给视线留出空间，眼神有了去处" });
+  }
+  tips.sort((a, b) => a.pri - b.pri);
+  if (!tips.length) tips.push({ pri: 9, good: 1, a: "✅", x: "构图很好，保持住，可以拍了" });
+  return tips.slice(0, 2);
+}
+
 /* 光位: 64px canvas 复用 + 脸四象限 + face/frame 比 */
 let lumCanvas = null;
 function lightAnalyze(el, fb, isPort) {
@@ -237,7 +291,10 @@ function loop(m) {
     ctx.strokeRect(s.x * sx, s.y * sy, s.w * sx, s.h * sy); ctx.setLineDash([]);
   }
   $("readyFill").style.width = score + "%"; $("readyFill").classList.toggle("hot", score >= 80);
-  const tips = s ? computeGuides(s, fb, bb, isPort, light, iw, ih, gaze) : [{ k: "seek", pri: 0, a: "🔍", x: "把镜头对准人物或风景主体" }];
+  let tips;
+  if (isPort) tips = composeCoach(fb, bb, lastFace, iw, ih, gaze).map(t => ({ k: t.x.slice(0, 8), pri: t.pri, warn: t.pri <= 2 && !t.good, good: t.good, a: t.a, x: t.x }));
+  else if (s) tips = computeGuides(s, fb, bb, false, light, iw, ih, gaze);
+  else tips = [{ k: "seek", pri: 0, a: "🔍", x: "把镜头对准人物或风景主体" }];
   renderTips(tips);
   if (score >= 80 && s) { readyHighFrames++; if (autoShot && readyHighFrames >= 5 && !counting) startCountdown(); }
   else { readyHighFrames = 0; }
@@ -246,7 +303,7 @@ function renderTips(tips) {
   const box = $("guideBox"); const now = performance.now();
   const keys = new Set(tips.map(t => t.k));
   for (const k of Object.keys(shownTips)) if (!keys.has(k)) delete shownTips[k];
-  box.innerHTML = tips.map(t => `<div class="gTip ${t.warn ? "warn" : ""}"><span>${t.a}</span><span>${t.x}</span></div>`).join("");
+  box.innerHTML = tips.map(t => `<div class="gTip ${t.warn ? "warn" : ""} ${t.good ? "good" : ""}"><span>${t.a}</span><span>${t.x}</span></div>`).join("");
 }
 function startCountdown() {
   counting = true; let n = 3; const cd = $("countdown"); cd.style.display = "block"; cd.textContent = n;
