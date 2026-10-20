@@ -1,8 +1,8 @@
 // AI Composition Tool Beta - Service Worker
-const VERSION = "actb-v0.8.0";
+const VERSION = "actb-v0.9.0";
 const SHELL = VERSION + "-shell";
 const RUNTIME = VERSION + "-runtime";
-const SHELL_ASSETS = ["./", "./index.html", "./icon-192.png", "./icon-512.png", "./manifest.webmanifest", "./404.html"];
+const SHELL_ASSETS = ["./", "./index.html", "./icon-192.png", "./icon-512.png", "./manifest.webmanifest", "./404.html", "./model/face_landmarker.task", "./model/pose_landmarker_lite.task"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(SHELL).then(c => c.addAll(SHELL_ASSETS)).then(() => self.skipWaiting()));
