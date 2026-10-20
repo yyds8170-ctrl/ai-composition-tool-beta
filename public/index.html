@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>AI 帮你重新构图 Beta v0.8</title>
+<title>AI 帮你重新构图 Beta v0.8.1</title>
 <style>
   :root { --bg:#0b0e13; --fg:#e8ecf1; --sub:#9aa4b2; --line:#232a35; --accent:#8ab4c8; --ok:#8fc7a6; --warn:#d8b47a; }
   * { margin:0; padding:0; box-sizing:border-box; }
@@ -51,7 +51,7 @@
 </head>
 <body>
 <header>
-  <h1>AI 帮你重新构图 <span>Beta v0.8</span></h1>
+  <h1>AI 帮你重新构图 <span>Beta v0.8.1</span></h1>
   <div class="sub">不会构图也没关系 · AI 实时引导你拍 · 全程本机推理 · 永久免费</div>
 </header>
 <main>
@@ -212,6 +212,78 @@ function composeCoach(fb, bb, faceLM, iw, ih, gaze) {
   return tips.slice(0, 2);
 }
 
+
+
+/* ---------- v0.8 调色板引擎: k-means++ @ CIE Lab (3 dominant + 2 vibrant) ---------- */
+function rgb2lab(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  r = r > .04045 ? Math.pow((r + .055) / 1.055, 2.4) : r / 12.92;
+  g = g > .04045 ? Math.pow((g + .055) / 1.055, 2.4) : g / 12.92;
+  b = b > .04045 ? Math.pow((b + .055) / 1.055, 2.4) : b / 12.92;
+  let x = (r * .4124 + g * .3576 + b * .1805) / .95047, y = r * .2126 + g * .7152 + b * .0722, z = (r * .0193 + g * .1192 + b * .9505) / 1.08883;
+  const q = t => t > .008856 ? Math.cbrt(t) : (7.787 * t) + 16 / 116;
+  x = q(x); y = q(y); z = q(z);
+  return [116 * y - 16, 500 * (x - y), 200 * (y - z)];
+}
+function labToHex(L, A, B) {
+  let y = (L + 16) / 116, x = A / 500 + y, z = y - B / 200;
+  const q = t => { const t3 = t * t * t; return t3 > .008856 ? t3 : (t - 16 / 116) / 7.787; };
+  x = .95047 * q(x); y = q(y); z = 1.08883 * q(z);
+  let r = x * 3.2406 + y * -1.5372 + z * -0.4986, g = x * -0.9689 + y * 1.8758 + z * .0415, b = x * .0557 + y * -0.204 + z * 1.057;
+  const u = t => { t = t > .0031308 ? 1.055 * Math.pow(t, 1 / 2.4) - .055 : 12.92 * t; return Math.max(0, Math.min(255, Math.round(t * 255))); };
+  return "#" + [u(r), u(g), u(b)].map(v => v.toString(16).padStart(2, "0")).join("");
+}
+function paletteExtract(img) {
+  const W = 128, H = Math.max(1, Math.round(W * img.height / img.width));
+  const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+  const cx = cv.getContext("2d", { willReadFrequently: true });
+  cx.drawImage(img, 0, 0, W, H);
+  const d = cx.getImageData(0, 0, W, H).data;
+  const pts = [];
+  for (let i = 0; i < d.length; i += 16) {
+    const r = d[i], g = d[i + 1], b = d[i + 2];
+    if (Math.max(r, g, b) - Math.min(r, g, b) < 8 && (r < 12 || r > 243)) continue;
+    pts.push(rgb2lab(r, g, b));
+  }
+  if (pts.length < 50) return null;
+  const K = 5;
+  const centers = [pts[(Math.random() * pts.length) | 0]];
+  while (centers.length < K) {
+    let sum = 0; const ds = pts.map(pt => { let m = 1e9; for (const ct of centers) { const dl = (pt[0] - ct[0]) ** 2 + (pt[1] - ct[1]) ** 2 + (pt[2] - ct[2]) ** 2; if (dl < m) m = dl; } return m; });
+    ds.forEach(v => sum += v);
+    let target = Math.random() * sum, idx = 0;
+    for (let i = 0; i < ds.length; i++) { target -= ds[i]; if (target <= 0) { idx = i; break; } }
+    centers.push(pts[idx]);
+  }
+  let assign = new Array(pts.length).fill(0);
+  for (let it = 0; it < 8; it++) {
+    for (let i = 0; i < pts.length; i++) {
+      let best = 0, bd = 1e9;
+      for (let k = 0; k < K; k++) { const dl = (pts[i][0] - centers[k][0]) ** 2 + (pts[i][1] - centers[k][1]) ** 2 + (pts[i][2] - centers[k][2]) ** 2; if (dl < bd) { bd = dl; best = k; } }
+      assign[i] = best;
+    }
+    for (let k = 0; k < K; k++) {
+      const members = pts.filter((_, i) => assign[i] === k);
+      if (members.length) centers[k] = [0, 1, 2].map(j => members.reduce((s, m) => s + m[j], 0) / members.length);
+    }
+  }
+  const count = new Array(K).fill(0);
+  assign.forEach(a => count[a]++);
+  const chroma = centers.map(c => Math.hypot(c[1], c[2]));
+  const dom = [...Array(K).keys()].sort((a, b) => count[b] - count[a]).slice(0, 3);
+  const vib = [...Array(K).keys()].filter(k => !dom.includes(k)).sort((a, b) => chroma[b] - chroma[a]).slice(0, 2);
+  const hexes = centers.map(c => labToHex(c[0], c[1], c[2]));
+  return { colors: [...dom, ...vib].map(k => ({ hex: hexes[k], share: count[k] / pts.length, dominant: dom.includes(k) })), centers: [...dom, ...vib].map(k => centers[k]) };
+}
+function paletteComment(pal) {
+  if (!pal || pal.centers.length < 2) return "";
+  const hue = c => (Math.atan2(c[2], c[1]) * 180 / Math.PI + 360) % 360;
+  const h1 = hue(pal.centers[0]), h2 = hue(pal.centers[1]);
+  let diff = Math.abs(h1 - h2); if (diff > 180) diff = 360 - diff;
+  if (diff > 140) return "主色呈互补对撞，画面自带戏剧张力";
+  if (diff < 40) return "主色同族相邻，画面安静统一";
+  return "主色相差适中，色彩既有层次又不打架";
+}
 
 /* ---------- v0.8 共识防抖(3帧中位数) + 滞回带(人像状态防闪烁) ---------- */
 let boxHistory = [], faceVotes = [];
@@ -457,8 +529,10 @@ function showPlan(i) {
     });
     return { label, items };
   })();
+  const pal = paletteExtract(bmp);
+  const palHtml = pal ? `<br><br><b>🎨 画面调色板</b> <span style="color:var(--sub);font-size:.8rem">${paletteComment(pal)}</span><br><div style="display:flex;gap:6px;margin-top:6px">` + pal.colors.map((cl, i) => `<div style="flex:1;height:34px;border-radius:7px;background:${cl.hex};position:relative" title="${cl.hex}${cl.dominant ? "·主色" : "·点睛"}"><span style="position:absolute;bottom:2px;right:4px;font-size:.55rem;color:#0b0e13;background:rgba(255,255,255,.7);border-radius:3px;padding:0 3px">${cl.hex}</span></div>`).join("") + `</div>` : "";
   $("explain").innerHTML = (diag.label ? `<b>🏷 AI 识别构图：${diag.label}</b><br>` : "") + `<b>构图思路 · ${p.name} · ${p.focal} · ${p.sideText} · ${FILTERS[curFilter][0]}</b><br>${p.why}`
-    + (diag.items.length ? "<br><br><b>综合诊断</b>" + diag.items.map(i => `<br>· ${i.t} → ${i.a}`).join("") : "");
+    + (diag.items.length ? "<br><br><b>综合诊断</b>" + diag.items.map(i => `<br>· ${i.t} → ${i.a}`).join("") : "") + palHtml;
   $("save").onclick = () => { const a = document.createElement("a"); a.download = "ai-composition-" + p.name + "-" + curFilter + ".png"; a.href = ca.toDataURL("image/png"); a.click(); };
 }
 $("pickFile").addEventListener("click", () => $("file").click());
