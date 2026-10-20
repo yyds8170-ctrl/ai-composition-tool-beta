@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>AI 帮你重新构图 Beta v0.7</title>
+<title>AI 帮你重新构图 Beta v0.8</title>
 <style>
   :root { --bg:#0b0e13; --fg:#e8ecf1; --sub:#9aa4b2; --line:#232a35; --accent:#8ab4c8; --ok:#8fc7a6; --warn:#d8b47a; }
   * { margin:0; padding:0; box-sizing:border-box; }
@@ -51,7 +51,7 @@
 </head>
 <body>
 <header>
-  <h1>AI 帮你重新构图 <span>Beta v0.7</span></h1>
+  <h1>AI 帮你重新构图 <span>Beta v0.8</span></h1>
   <div class="sub">不会构图也没关系 · AI 实时引导你拍 · 全程本机推理 · 永久免费</div>
 </header>
 <main>
@@ -89,7 +89,7 @@
 const $ = id => document.getElementById(id);
 const MODEL_BASES = ["./model/"];
 const WASM = "./vendor/wasm";
-let bmp = null, models = null, modelPromise = null;
+let bmp = null, models = null, modelPromise = null, curLight = { ratio: null, pos: null };
 let lastFace = null, lastPose = null, plans = [], curFilter = "clear";
 let camStream = null, camRunning = false, rafId = 0, lastDetect = 0;
 let autoShot = false, readyHighFrames = 0, counting = false, cdTimer = 0;
@@ -212,6 +212,59 @@ function composeCoach(fb, bb, faceLM, iw, ih, gaze) {
   return tips.slice(0, 2);
 }
 
+
+/* ---------- v0.8 共识防抖(3帧中位数) + 滞回带(人像状态防闪烁) ---------- */
+let boxHistory = [], faceVotes = [];
+function consensusBox(s) {
+  boxHistory.push(s || null);
+  if (boxHistory.length > 3) boxHistory.shift();
+  const boxes = boxHistory.filter(Boolean);
+  if (boxes.length < 3) return s;
+  const med = k => { const a = boxes.map(b => b[k]).sort((x, y) => x - y); return a[Math.floor(a.length / 2)]; };
+  return { x: med("x"), y: med("y"), w: med("w"), h: med("h") };
+}
+let personBand = "hold";
+function confBand(faceSeen) {
+  faceVotes.push(faceSeen ? 1 : 0);
+  if (faceVotes.length > 5) faceVotes.shift();
+  const ratio = faceVotes.reduce((a, b) => a + b, 0) / faceVotes.length;
+  if (ratio >= .6) personBand = "person";
+  else if (ratio <= .2) personBand = "none";
+  return personBand;   // 中间带保持上一状态 = 滞回防闪烁
+}
+/* 七项诊断(移植 _composeDiagnosis 模式: sev 排序 + 同源抑制 + 正向反馈) */
+function composeDiagnosis(o) {
+  const out = [];
+  const num = v => (typeof v === "number" && isFinite(v)) ? v : null;
+  const gaze = o.gaze && o.gaze.dir !== 0 && !o.gaze.dead, faceCx = num(o.faceCx);
+  let gazeHit = false;
+  if (gaze && faceCx !== null) {
+    const tx = o.gaze.dir > 0 ? .33 : .67;
+    if (Math.abs(faceCx - tx) > .10) { out.push({ sev: 2, t: "👀 视线留白不足", a: "把" + (o.gaze.dir > 0 ? "右" : "左") + "边多留点空，眼神有了去处画面才舒服" }); gazeHit = true; }
+  }
+  const ht = num(o.headTop);
+  if (ht !== null && (ht < .04 || ht > .24)) out.push({ sev: 1, t: "📏 头顶留白不当", a: "头顶留一拳空，别贴顶也别空太多" });
+  const ey = num(o.eyesY);
+  if (!gazeHit && ey !== null && (ey > .42 || ey < .24)) out.push({ sev: 1, t: "🎯 眼睛不在上横线", a: "眼睛对上上方那条横线，画面立刻稳定" });
+  const hr = num(o.horizonRatio);
+  if (o.isLandscape && hr !== null && Math.abs(hr - .5) < .03) out.push({ sev: 1, t: "🌅 地平线卡在正中", a: "天好就压低、地好就抬高到三分之一线" });
+  if (o.light && o.light.pos) out.push({ sev: 2, t: "💡 光线可优化", a: o.light.pos.txt });
+  if (o.subjectFull) out.push({ sev: 1, t: "✅ 主体完整保留", a: "裁切框已包住人物/主体全部关键部位，放心拍" });
+  out.sort((a, b) => b.sev - a.sev);
+  return out.slice(0, 3);
+}
+/* 构图识别标签(移植 _classifyComposition 简化版) */
+function classifyComposition(hr, cx, sym) {
+  if (!(hr > .12)) return null;
+  const shot = hr >= .85 ? "全身" : hr >= .45 ? "半身" : "特写";
+  let type = null;
+  if (sym >= .75) type = "对称构图";
+  else if (cx >= .30 && cx <= .42) type = "左三分法";
+  else if (cx >= .58 && cx <= .70) type = "右三分法";
+  else if (cx >= .46 && cx <= .54) type = "中心构图";
+  return type ? type + "·" + shot : null;
+}
+
 /* 光位: 64px canvas 复用 + 脸四象限 + face/frame 比 */
 let lumCanvas = null;
 function lightAnalyze(el, fb, isPort) {
@@ -277,7 +330,10 @@ function loop(m) {
   const isPort = !!fb;
   const light = lightAnalyze(v, fb, isPort);
   const gaze = fb ? facingOf(lastFace) : null;
-  const s = (fb || bb) ? subjectRect(fb, bb, isPort, iw, ih) : null;
+  const band = confBand(!!fb);
+  const rawS = (fb || bb) ? subjectRect(fb, bb, isPort, iw, ih) : null;
+  const s = consensusBox(rawS);
+  const isPortStable = band === "person" ? isPort : (band === "none" ? false : isPort);
   let score = 0;
   if (s) {
     const rc = { x: s.x + s.w / 2, y: s.y + s.h / 2 };
@@ -292,7 +348,7 @@ function loop(m) {
   }
   $("readyFill").style.width = score + "%"; $("readyFill").classList.toggle("hot", score >= 80);
   let tips;
-  if (isPort) tips = composeCoach(fb, bb, lastFace, iw, ih, gaze).map(t => ({ k: t.x.slice(0, 8), pri: t.pri, warn: t.pri <= 2 && !t.good, good: t.good, a: t.a, x: t.x }));
+  if (isPortStable) tips = composeCoach(fb, bb, lastFace, iw, ih, gaze).map(t => ({ k: t.x.slice(0, 8), pri: t.pri, warn: t.pri <= 2 && !t.good, good: t.good, a: t.a, x: t.x }));
   else if (s) tips = computeGuides(s, fb, bb, false, light, iw, ih, gaze);
   else tips = [{ k: "seek", pri: 0, a: "🔍", x: "把镜头对准人物或风景主体" }];
   renderTips(tips);
@@ -346,6 +402,7 @@ async function finishAnalyze(fromCam) {
   status("AI 分析中…");
   lastFace = ((m.face.detect(bmp)).faceLandmarks || [])[0] || null;
   lastPose = ((m.pose.detect(bmp)).landmarks || [])[0] || null;
+  { const fb2 = lastFace ? faceBox(lastFace, bmp.width, bmp.height) : null; curLight = lightAnalyze(bmp, fb2, !!fb2); }
   buildPlans();
   if (!plans.length) { status("未检出主体——换一张有人物或风景的照片试试"); return; }
   $("capBefore").textContent = fromCam ? "当前取景" : "你拍到的";
@@ -388,7 +445,20 @@ function showPlan(i) {
   ctx.filter = "none";
   ctx.strokeStyle = "rgba(232,236,241,.3)"; ctx.lineWidth = 1;
   for (const f of [1 / 3, 2 / 3]) { ctx.beginPath(); ctx.moveTo(f * ca.width, 0); ctx.lineTo(f * ca.width, ca.height); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0, f * ca.height); ctx.lineTo(ca.width, f * ca.height); ctx.stroke(); }
-  $("explain").innerHTML = `<b>构图思路 · ${p.name} · ${p.focal} · ${p.sideText} · ${FILTERS[curFilter][0]}</b><br>${p.why}`;
+  const diag = (function() {
+    const fb2 = lastFace ? faceBox(lastFace, bmp.width, bmp.height) : null;
+    const bb2 = lastPose ? bodyBox(lastPose, bmp.width, bmp.height) : null;
+    const eyesY = fb2 ? (lastFace[33].y + lastFace[263].y) / 2 : null;
+    const label = fb2 || bb2 ? classifyComposition(bb2 ? bb2.h / bmp.height : fb2.h / bmp.height * 1.9, (p.x + p.w / 2) / bmp.width, 0) : null;
+    const items = composeDiagnosis({
+      gaze: fb2 ? facingOf(lastFace) : null, faceCx: fb2 ? fb2.cx / bmp.width : null,
+      headTop: p.y > 0 && fb2 ? (fb2.y - p.y) / p.h : (fb2 ? fb2.y / bmp.height : null),
+      eyesY: eyesY, isLandscape: !fb2 && !bb2, light: curLight, subjectFull: true,
+    });
+    return { label, items };
+  })();
+  $("explain").innerHTML = (diag.label ? `<b>🏷 AI 识别构图：${diag.label}</b><br>` : "") + `<b>构图思路 · ${p.name} · ${p.focal} · ${p.sideText} · ${FILTERS[curFilter][0]}</b><br>${p.why}`
+    + (diag.items.length ? "<br><br><b>综合诊断</b>" + diag.items.map(i => `<br>· ${i.t} → ${i.a}`).join("") : "");
   $("save").onclick = () => { const a = document.createElement("a"); a.download = "ai-composition-" + p.name + "-" + curFilter + ".png"; a.href = ca.toDataURL("image/png"); a.click(); };
 }
 $("pickFile").addEventListener("click", () => $("file").click());
