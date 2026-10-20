@@ -1,5 +1,5 @@
 // AI Composition Tool Beta - Service Worker
-const VERSION = "actb-v0.7.0";
+const VERSION = "actb-v0.8.0";
 const SHELL = VERSION + "-shell";
 const RUNTIME = VERSION + "-runtime";
 const SHELL_ASSETS = ["./", "./index.html", "./icon-192.png", "./icon-512.png", "./manifest.webmanifest", "./404.html"];
